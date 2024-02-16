@@ -20,6 +20,7 @@ env:
   _kernel_on_diet: "true"
   _kernel_work_folder: "/tmp"
   _kernel_source_folder: "/tmp"
+  _dracut_option: "--zstd"
   # _modprobeddb: "true"
   _modprobeddb_db_path: ${{ github.workspace }}/modprobed.db
 
