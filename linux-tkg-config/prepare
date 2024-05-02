@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # List of kernels that are maintained upstream
-_current_kernels=("6.8" "6.7" "6.6" "6.5" "6.4" "6.1" "5.15")
+_current_kernels=("6.9" "6.8" "6.7" "6.6" "6.5" "6.4" "6.1" "5.15")
 
 # List of kernels that are no longer maintained either upstream or locally
 _eol_kernels=("6.3" "6.2" "6.0" "5.19" "5.18" "5.17" "5.16" "5.14" "5.13" "5.12" "5.11" "5.9" "5.8" "5.7" "5.4.230" "5.10.135")
@@ -23,6 +23,10 @@ fi
 
 if [[ -z "$_git_mirror" ]]; then
   _git_mirror="${_git_remote_names[2]}"
+  if $( ! timeout 5 git ls-remote ${_kernel_git_remotes[$_git_mirror]} >/dev/null ) || [[ "$( git ls-remote ${_kernel_git_remotes[$_git_mirror]} | head -n 1 )" = *502* ]]; then
+    warning "kernel.org unreachable or too long to respond"
+    _git_mirror="${_git_remote_names[0]}"
+  fi
   echo "Defaulting to ${_git_mirror} git mirror"
 fi
 
@@ -39,44 +43,46 @@ done
 # PREEMPT_RT's supported kernel subversion
 typeset -Ag _rt_subver_map
 _rt_subver_map=(
-  ["5.4"]="264"
+  ["5.4"]="271"
   ["5.9"]="1"
-  ["5.10"]="210"
+  ["5.10"]="213"
   ["5.11"]="4"
   ["5.14"]="2"
-  ["5.15"]="148"
+  ["5.15"]="153"
   ["5.16"]="2"
   ["5.17"]="1"
   ["6.0"]="5"
-  ["6.1"]="80"
+  ["6.1"]="83"
   ["6.3"]="3"
   ["6.4"]="6"
   ["6.5"]="2"
-  ["6.6"]="20"
+  ["6.6"]="23"
   ["6.7"]="0"
-  ["6.8"]="rc7"
+  ["6.8"]="2"
+  ["6.9"]="rc2"
 )
 
 # PREEMPT_RT's patch revision for the kernel
 # We separated this to allow for forcing the application of the patch when _preempt_rt_force=1 on version mismatch
 typeset -Ag _rt_rev_map
 _rt_rev_map=(
-  ["5.4"]="88"
+  ["5.4"]="89"
   ["5.9"]="20"
-  ["5.10"]="102"
+  ["5.10"]="105"
   ["5.11"]="11"
   ["5.14"]="21"
-  ["5.15"]="74"
+  ["5.15"]="75"
   ["5.16"]="19"
   ["5.17"]="17"
   ["6.0"]="14"
-  ["6.1"]="26"
+  ["6.1"]="28"
   ["6.3"]="15"
   ["6.4"]="8"
   ["6.5"]="8"
-  ["6.6"]="25"
+  ["6.6"]="28"
   ["6.7"]="6"
-  ["6.8"]="6"
+  ["6.8"]="11"
+  ["6.9"]="1"
 )
 
 _undefine() {
@@ -270,6 +276,7 @@ _set_cpu_scheduler() {
     ["upds"]="Undead PDS (TkG)"
     ["cacule"]="CacULE"
     ["tt"]="TT (TaskType)"
+    ["echo"]="ECHO (Enhanced CPU Handling Orchestrator)"
     ["bore"]="BORE (Burst-Oriented Response Enhancer) CPU Scheduler"
     ["bore-eevdf"]="BORE (Burst-Oriented Response Enhancer - EEVDF variant) CPU Scheduler"
   )
@@ -316,9 +323,9 @@ _set_cpu_scheduler() {
   elif [ "$_kver" = "606" ]; then
     _avail_cpu_scheds=("eevdf" "bore" "pds" "bmq")
   elif [ "$_kver" = "607" ]; then
-    _avail_cpu_scheds=("eevdf" "bore" "pds" "bmq")
+    _avail_cpu_scheds=("eevdf" "bore" "echo" "pds" "bmq")
   elif [ "$_kver" = "608" ]; then
-    _avail_cpu_scheds=("eevdf" "bore" "pds" "bmq")
+    _avail_cpu_scheds=("eevdf" "bore" "echo" "pds" "bmq")
   else
     _avail_cpu_scheds=("$_default_cpu_sched")
   fi
@@ -330,12 +337,6 @@ _set_cpu_scheduler() {
     fi
     if [[ "${_avail_cpu_scheds[*]}" =~ "eevdf" ]] && ! [[ "${_avail_cpu_scheds[*]}" =~ "cfs" ]]; then
       _avail_cpu_scheds_rt=("eevdf")
-    fi
-    if [[ "${_avail_cpu_scheds[*]}" =~ "bore" ]]; then
-      _avail_cpu_scheds_rt+=("bore")
-    fi
-    if [[ "${_avail_cpu_scheds[*]}" =~ "bore-eevdf" ]] && ! [[ "${_avail_cpu_scheds[*]}" =~ "cfs" ]]; then
-      _avail_cpu_scheds_rt+=("bore-eevdf")
     fi
     _avail_cpu_scheds=(${_avail_cpu_scheds_rt[*]})
   fi
@@ -764,33 +765,13 @@ _tkg_srcprep() {
   tkgpatch="$srcdir/0002-mm-Support-soft-dirty-flag-read-with-reset.patch" && _tkg_patcher
 
   # prjc/bmq patch rev
-  if [ "$_kver" = "508" ] || [ "$_kver" = "507" ]; then
+  if [ "$_kver" = "508" ] || [ "$_kver" = "507" ] || [ "$_kver" = "509" ] || [ "$_kver" = "511" ] || [ "$_kver" = "513" ] || [ "$_kver" = "514" ]; then
     rev=3
-  elif [ "$_kver" = "509" ]; then
-    rev=3
-  elif [ "$_kver" = "510" ]; then
+  elif [ "$_kver" = "510" ] || [ "$_kver" = "608" ]; then
     rev=5
-  elif [ "$_kver" = "511" ]; then
-    rev=3
-  elif [ "$_kver" = "512" ]; then
+  elif [ "$_kver" = "512" ] || [ "$_kver" = "515" ] || [ "$_kver" = "516" ] || [ "$_kver" = "601" ] || [ "$_kver" = "603" ] || [ "$_kver" = "608" ]; then
     rev=1
-  elif [ "$_kver" = "513" ]; then
-    rev=3
-  elif [ "$_kver" = "514" ]; then
-    rev=3
-  elif [ "$_kver" = "515" ]; then
-    rev=1
-  elif [ "$_kver" = "516" ]; then
-    rev=1
-  elif [ "$_kver" = "518" ]; then
-    rev=2
-  elif [ "$_kver" = "601" ]; then
-    rev=1
-  elif [ "$_kver" = "602" ]; then
-    rev=2
-  elif [ "$_kver" = "603" ]; then
-    rev=1
-  elif [ "$_kver" = "607" ]; then
+  elif [ "$_kver" = "518" ] || [ "$_kver" = "602" ] || [ "$_kver" = "607" ]; then
     rev=2
   else
     rev=0
@@ -871,6 +852,10 @@ _tkg_srcprep() {
       curl "https://raw.githubusercontent.com/hamadmarri/TT-CPU-Scheduler/master/patches/${_basekernel}/high-hz.patch" > "$srcdir"/tt_high_hz.patch
       tkgpatch="$srcdir/tt_high_hz.patch" && _tkg_patcher
     fi
+  elif [ "${_cpusched}" = "echo" ]; then
+    _msg="Applying ECHO patch"
+    curl "https://raw.githubusercontent.com/hamadmarri/ECHO-CPU-Scheduler/main/${_basekernel}.y/linux-${_basekernel}-echo.patch" > "$srcdir"/0001-echo.patch
+    tkgpatch="$srcdir/0001-echo.patch" && _tkg_patcher
   elif [ "${_cpusched}" = "bore" ]; then
     _msg="Applying BORE patch"
     curl "https://raw.githubusercontent.com/CachyOS/kernel-patches/master/${_basekernel}/sched/0001-bore.patch" > "$srcdir"/0001-bore.patch
@@ -890,6 +875,11 @@ _tkg_srcprep() {
     elif [[ $_kver -ge 606 ]]; then
       _msg="Applying Glitched EEVDF additions patch"
       tkgpatch="$srcdir/0003-glitched-eevdf-additions.patch" && _tkg_patcher
+      if [ "$_eevdf_sched_ext_support" = "true" ] && [[ $_kver -ge 608 ]]; then
+        _msg="Applying Sched_ext support patch"
+        curl "https://raw.githubusercontent.com/CachyOS/kernel-patches/master/${_basekernel}/sched/0001-sched-ext.patch" > "$srcdir"/0001-sched-ext.patch
+        tkgpatch="$srcdir/0001-sched-ext.patch" && _tkg_patcher
+      fi
     fi
 
     if [ "${_cpusched}" = "bore-eevdf" ]; then
@@ -940,7 +930,7 @@ _tkg_srcprep() {
 
   # Set some -tkg defaults
   _disable "DYNAMIC_FAULT" "DEFAULT_FQ_CODEL" "WERROR"
-  _enable "DEFAULT_CAKE"
+  _enable "DEFAULT_CAKE" "AMD_PRIVATE_COLOR"
   if [ "$_kver" = "504" ]; then
     _module "TP_SMAPI"
     _enable "RAID6_USE_PREFER_GEN"
@@ -972,6 +962,10 @@ _tkg_srcprep() {
     # Disable MLX5_CORE on Prjc
     plain "Disable MLX5_CORE for Prjc"
     _disable "MLX5_CORE"
+  fi
+
+  if [ "$_eevdf_sched_ext_support" = "true" ] && [[ $_kver -ge 608 ]]; then
+    _enable "SCHED_CLASS_EXT"
   fi
 
   if [ -n "$_custom_commandline" ]; then
@@ -1138,6 +1132,9 @@ _tkg_srcprep() {
   elif [ "${_cpusched}" = "tt" ]; then
     _enable "TT_SCHED"
     _enable "TT_ACCOUNTING_STATS"
+  elif [ "${_cpusched}" = "echo" ]; then
+    _enable "ECHO_SCHED"
+    _disable "FAIR_GROUP_SCHED" "SCHED_AUTOGROUP" "SCHED_CORE"
   elif [ "${_cpusched}" = "upds" ]; then
     # PDS default config
     _enable "SCHED_PDS"
@@ -1346,6 +1343,9 @@ _tkg_srcprep() {
   if [ "$_cpusched" = "cacule" ]; then
     _avail_timer_frequencies+=("2000")
     _avail_timer_frequencies_text+=("2000 Hz")
+  elif [ "$_cpusched" = "echo" ]; then
+    _avail_timer_frequencies=("625")
+    _avail_timer_frequencies_text=("625 Hz")
   fi
 
   typeset -A _default_timer_frequencies_index
@@ -1354,6 +1354,7 @@ _tkg_srcprep() {
     ["muqss"]="1"
     ["cacule"]="6"
     ["tt"]="5"
+    ["echo"]="0"
     ["upds"]="5"
     ["cfs"]="5"
     ["eevdf"]="5"
